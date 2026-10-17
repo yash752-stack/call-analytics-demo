@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Call analytics demo</title>
+<meta name="description" content="Live demo: a self-hosted engine turns a Hindi / Hinglish helpdesk call into a filled ticket. By Yash Chaudhary.">
+<meta property="og:title" content="Call analytics demo">
+<meta property="og:description" content="A helpdesk call in, a filled ticket out, without a paid API.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --black: #181818; --panel: #202020; --rule: #333333;
+    --ink: #f2f2f2; --ink-2: #b4b4b4; --ink-3: #8a8a8a;
+    --green: #50c850;   /* candidate, as in the profile figure */
+    --miss: #e8a33a;    /* a word the engine heard differently */
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--black); color: var(--ink); font: 400 17px/1.6 Barlow, "Segoe UI", Arial, sans-serif; }
+  a { color: var(--ink); text-decoration-color: var(--ink-3); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  .text { max-width: 680px; }
+  header { padding: 56px 0 26px; }
+  h1, h2, h3 { font-family: "Barlow Semi Condensed", Barlow, sans-serif; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  h1 { font-size: clamp(34px, 5.2vw, 56px); line-height: 1.04; max-width: 16ch; }
+  h2 { font-size: 27px; line-height: 1.2; margin: 0 0 14px; }
+  h3 { font-size: 19px; margin: 0 0 10px; }
+  .lead { font-size: 20px; line-height: 1.5; color: var(--ink-2); margin: 22px 0 0; max-width: 34em; }
+  .byline { color: var(--ink-3); margin: 18px 0 0; font-size: 15px; }
+  p { margin: 0 0 14px; }
+  .muted { color: var(--ink-2); }
+
+  .call { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 0; border-top: 4px solid var(--green); background: var(--panel); }
+  .listen { padding: 20px 22px 18px; border-right: 1px solid var(--rule); min-width: 0; }
+  .ticket { padding: 20px 22px; min-width: 0; }
+  .player { display: flex; gap: 14px; align-items: center; margin: 0 0 14px; flex-wrap: wrap; }
+  .player button { font: 500 16px Barlow, sans-serif; color: #101010; background: var(--ink); border: 0; border-radius: 4px; padding: 9px 16px; cursor: pointer; min-width: 92px; }
+  .player button:hover { background: #fff; }
+  .bar { flex: 1 1 160px; height: 6px; background: #3a3a3a; border-radius: 3px; position: relative; cursor: pointer; }
+  .bar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--green); border-radius: 3px; }
+  .time { color: var(--ink-3); font-size: 14px; font-variant-numeric: tabular-nums; min-width: 84px; }
+  label.toggle { display: inline-flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 15px; cursor: pointer; margin: 0 0 10px; }
+  label.toggle input { accent-color: var(--green); width: 16px; height: 16px; }
+  ol.lines { list-style: none; margin: 0; padding: 0; }
+  ol.lines li { display: grid; grid-template-columns: 46px 86px 1fr; gap: 0 10px; padding: 7px 8px; border-radius: 4px; cursor: pointer; }
+  ol.lines li:hover { background: #272727; }
+  ol.lines li.now { background: #2c2c2c; }
+  .t { color: var(--ink-3); font-size: 14px; font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .who { font-weight: 500; font-size: 15px; padding-top: 1px; }
+  .who.agent { color: var(--ink); } .who.candidate { color: var(--green); }
+  .heard { color: #dcdcdc; }
+  .heard mark { background: none; color: var(--miss); text-decoration: underline wavy; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+  .said { display: none; color: var(--ink-3); font-size: 15px; grid-column: 3; margin-top: 2px; }
+  .show-said .said { display: block; }
+  .legend { color: var(--ink-3); font-size: 14px; margin: 12px 0 0; }
+  .legend span { color: var(--miss); text-decoration: underline wavy; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+
+  dl { margin: 0; }
+  dt { color: var(--ink-3); font-size: 14px; margin: 14px 0 2px; }
+  dt:first-child { margin-top: 0; }
+  dd { margin: 0; }
+  .big { font-family: "Barlow Semi Condensed", sans-serif; font-weight: 600; font-size: 24px; line-height: 1.2; }
+  .alt { color: var(--ink-2); font-size: 15px; }
+  .scores { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; font-size: 15px; color: var(--ink-2); margin-top: 4px; }
+  .pips { display: flex; gap: 3px; } .pips b { width: 18px; height: 8px; border-radius: 2px; background: #3a3a3a; } .pips b.on { background: var(--green); }
+
+  section { padding: 56px 0 0; }
+  table { border-collapse: collapse; width: 100%; max-width: 780px; font-size: 16px; }
+  th, td { text-align: left; padding: 11px 16px 11px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-weight: 500; color: var(--ink-3); font-size: 14px; }
+  td { color: var(--ink-2); }
+  td.n { font-family: "Barlow Semi Condensed", sans-serif; font-weight: 600; font-size: 21px; white-space: nowrap; color: var(--ink); }
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; border-top: 1px solid var(--rule); }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 52px 1fr; gap: 0 14px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+  ol.steps li::before { content: counter(s); font-family: "Barlow Semi Condensed", sans-serif; font-weight: 600; font-size: 22px; color: var(--green); line-height: 1.3; }
+  ol.steps b { font-weight: 500; } ol.steps p { margin: 2px 0 0; color: var(--ink-2); }
+  footer { margin: 72px 0 0; padding: 22px 0 40px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 15px; }
+  footer a { color: var(--ink-2); }
+  @media (max-width: 820px) {
+    .call { grid-template-columns: 1fr; }
+    .listen { border-right: 0; border-bottom: 1px solid var(--rule); }
+  }
+  @media (max-width: 560px) {
+    header { padding-top: 36px; } .lead { font-size: 18px; }
+    .listen, .ticket { padding: 16px 14px; }
+    ol.lines li { grid-template-columns: 40px 1fr; }
+    ol.lines .who { grid-column: 2; } ol.lines .heard, ol.lines .said { grid-column: 1 / -1; }
+    ol.steps li { grid-template-columns: 34px 1fr; }
+  }
+</style>
+</head>
+<body>
+<header class="wrap">
+  <h1>A helpdesk call in, a filled ticket out, without a paid API</h1>
+  <p class="lead">A live exam-helpdesk portal paid Gemini to transcribe and categorise every call. I replaced it with a self-hosted engine. Play a call and watch what it produces.</p>
+  <p class="byline">Built by <a href="https://github.com/yash752-stack">Yash Chaudhary</a>, 2026</p>
+</header>
+
+<div class="wrap">
+  <div class="call">
+    <div class="listen">
+      <div class="player">
+        <button id="play" type="button" aria-controls="audio">Play call</button>
+        <div class="bar" id="bar" role="slider" aria-label="Position in the call" tabindex="0" aria-valuemin="0" aria-valuemax="57" aria-valuenow="0"><i id="fill"></i></div>
+        <span class="time" id="time">0:00 / 0:57</span>
+      </div>
+      <audio id="audio" src="media/call.mp3" preload="metadata"></audio>
+      <label class="toggle"><input type="checkbox" id="said"> Show what was actually said</label>
+      <ol class="lines" id="lines" aria-live="off"></ol>
+      <p class="legend">Underlined words: the engine heard something different from the script. This call scores <strong id="wer"></strong> word error rate, not counting spelling variants such as toh and to. A clean synthetic call is easier than a real phone line; on real calls it is 24.1%.</p>
+    </div>
+    <div class="ticket" aria-labelledby="h-ticket">
+      <h3 id="h-ticket">The ticket it filled</h3>
+      <dl id="ticket"></dl>
+    </div>
+  </div>
+  <p class="muted" style="font-size:15px;margin-top:12px;max-width:46em">A synthetic call: both voices are text-to-speech reading a script, so no real caller is heard. The greeting, which names the real helpline, is cut. Everything else is the engine's raw output, mistakes included.</p>
+
+  <section aria-labelledby="h-results">
+    <h2 id="h-results">Measured against Gemini on real calls</h2>
+    <table>
+      <thead><tr><th scope="col">Result</th><th scope="col">What it means</th></tr></thead>
+      <tbody>
+        <tr><td class="n">53.2%</td><td>sub-category agreement with Gemini on 631 calls the model never trained on, up from 35.3% when an LLM prompt chose it</td></tr>
+        <tr><td class="n">79.1%</td><td>category agreement, up from 75.9%</td></tr>
+        <tr><td class="n">77%</td><td>of calls have Gemini's sub-category among the model's top three</td></tr>
+        <tr><td class="n">24.1%</td><td>word error rate against Gemini's transcripts, from Whisper fine-tuned on helpdesk calls</td></tr>
+      </tbody>
+    </table>
+    <p class="muted text" style="margin-top:16px">Gemini is the reference here, not the truth: two people labelling the same calls agree on the exact sub-category only about 61% of the time. That ceiling is why unsure calls go to a person with the next two guesses.</p>
+  </section>
+
+  <section aria-labelledby="h-how">
+    <h2 id="h-how">What happens to a call</h2>
+    <ol class="steps">
+      <li><div><b>Transcribe.</b><p>Whisper, fine-tuned on helpdesk recordings, writes Hindi and Hinglish in Latin script, the way the portal shows it.</p></div></li>
+      <li><div><b>Split the speakers.</b><p>Each line is labelled agent or candidate from the two sides of the call.</p></div></li>
+      <li><div><b>Pick the category.</b><p>A model trained on about 7,200 calls Gemini had labelled combines a text classifier, embeddings and the most similar past calls, and reports how sure it is.</p></div></li>
+      <li><div><b>Fill the QA sheet.</b><p>A small open-weight LLM writes the insight and summary and scores the agent on greeting, understanding, correctness, next steps and closing.</p></div></li>
+      <li><div><b>Wake only when needed.</b><p>The GPU server sleeps when idle. The portal wakes it through AWS Lambda once calls queue up, and one setting switches back to Gemini.</p></div></li>
+    </ol>
+  </section>
+</div>
+
+<footer class="wrap">
+  <p>The source code and real calls are private: they belong to the helpdesk. Happy to walk through it: <a href="https://github.com/yash752-stack">GitHub</a>, <a href="https://linkedin.com/in/yash-chaudhary">LinkedIn</a>. Also see the <a href="https://yash752-stack.github.io/exam-integrity-demo/">exam-hall integrity demo</a>.</p>
+</footer>
+
+<script>
+const CALL = {"segments": [{"start": 0.15, "end": 2.37, "speaker": "AGENT", "heard": "Main aapki kya sahi error kar sakta hoon?", "said": "Main aapki kya sahayata kar sakta hoon?"}, {"start": 3.26, "end": 10.11, "speaker": "CANDIDATE", "heard": "Namaste sir, Poonv Riram. Main one time registration registration kar raha hoon, lekin mere mobile par OTP nahi aa raha hai.", "said": "Namaste sir. Main OTR registration kar raha hoon, lekin mere mobile par OTP nahi aa raha hai."}, {"start": 10.97, "end": 17.09, "speaker": "AGENT", "heard": "Theek hai. Kya aapne jo mobile number daala hai, woh sahi hai aur abhi aapke paas shalu hai.", "said": "Theek hai. Kya aapne jo mobile number daala hai, woh sahi hai aur abhi aapke paas chalu hai?"}, {"start": 17.94, "end": 23.1, "speaker": "CANDIDATE", "heard": "Haan sir, number sahi hai. Maine teen baar ghazan bhi kiya, fir bhi OTP nahi aaya.", "said": "Haan sir, number sahi hai. Maine teen baar resend bhi kiya, phir bhi OTP nahi aaya."}, {"start": 23.64, "end": 27.2, "speaker": "AGENT", "heard": "Kai baar network ki wajah se OTP der se aata hai.", "said": "Kai baar network ki wajah se OTP der se aata hai."}, {"start": 27.42, "end": 32.38, "speaker": "AGENT", "heard": "Aap 10 minute fakir dobara koshish kijiye aur ek hi baar ghazan dhbhaiye.", "said": "Aap das minute ruk kar dobara koshish kijiye, aur ek hi baar resend dabaiye."}, {"start": 33.08, "end": 36.35, "speaker": "CANDIDATE", "heard": "Achha hai. Aur agar phir bhi nahi aaya toh kya cocoon?", "said": "Achha. Aur agar phir bhi nahi aaya to kya karoon?"}, {"start": 37.21, "end": 48.54, "speaker": "AGENT", "heard": "toh aap kisi dusre browser mein portal khol kar try kijiye. Agar phir bhi samse rahe, toh helpline par dobara call kijiye. Hum aapki shikhaayat aage bhej dhendhpur niram.", "said": "To aap kisi doosre browser mein portal kholkar try kijiye. Agar phir bhi samasya rahe, to helpline par dobara call kijiye, hum aapki shikayat aage bhej denge."}, {"start": 49.5, "end": 53.09, "speaker": "CANDIDATE", "heard": "Theek hai sir, main 10 minute baad try karta hoon. Dhanyawad.", "said": "Theek hai sir, main das minute baad try karta hoon. Dhanyavaad."}, {"start": 53.78, "end": 56.58, "speaker": "AGENT", "heard": "Dhanyawad. Aapka din shab ho.", "said": "Dhanyavaad. Aapka din shubh ho."}], "output": {"Call Category": "Registration & Portal", "Sub-Category": "Mobile OTP Not Received", "confidence": 0.779, "needs_review": false, "alternatives": ["Portal Not Loading / Technical Error", "OTP Login Not Working"], "AI Insight": "Mobile OTP not received despite correct number and retries", "Summary": "Candidate reported OTP not received on mobile during registration. Agent acknowledged and advised retry after 10 minutes, switch browser, and re-call if needed. However, did not mention 'Change Mobile' option, check internet, or escalate to technical team as per approved answer. Also did not advise against using a different number.", "Call Resolved": "Yes", "call_resolved_raw": "Partial", "Agent Score": 8, "score_items": {"greeting": 2, "understanding": 2, "correctness": 1, "next_steps": 1, "closing": 2}, "Language": "Hindi", "Audio Rating": "Good"}, "wer": 11.5, "words": 136};
+const $ = id => document.getElementById(id);
+// spelling variants of the same Hinglish word are not errors (same rules as the WER figure)
+const VAR = {toh: "to", fir: "phir", dhanyawad: "dhanyavaad", dusre: "doosre", shikhaayat: "shikayat", "10": "das"};
+const EXP = [[/\botr\b/g, "one time registration"], [/\bkholkar\b/g, "khol kar"]];
+const norm = s => { s = s.toLowerCase(); EXP.forEach(([a, b]) => s = s.replace(a, b));
+  return s.replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(Boolean).map(w => VAR[w] || w); };
+const esc = s => s.replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const mmss = t => Math.floor(t / 60) + ":" + String(Math.floor(t % 60)).padStart(2, "0");
+
+// mark the heard words that are not in the longest common subsequence with what was said
+function marked(heard, said) {
+  const H = heard.split(/\s+/), h = H.map(w => norm(w).join("")), s = norm(said);
+  const L = Array.from({length: h.length + 1}, () => new Array(s.length + 1).fill(0));
+  for (let i = h.length - 1; i >= 0; i--) for (let j = s.length - 1; j >= 0; j--)
+    L[i][j] = h[i] && h[i] === s[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  const keep = new Set(); let i = 0, j = 0;
+  while (i < h.length && j < s.length) {
+    if (h[i] && h[i] === s[j]) { keep.add(i); i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++;
+  }
+  return H.map((w, k) => (keep.has(k) || !h[k]) ? esc(w) : "<mark>" + esc(w) + "</mark>").join(" ");
+}
+
+const lines = $("lines");
+CALL.segments.forEach((g, k) => {
+  const li = document.createElement("li");
+  li.dataset.k = k;
+  li.innerHTML = `<span class="t">${mmss(g.start)}</span><span class="who ${g.speaker.toLowerCase()}">${g.speaker === "AGENT" ? "Agent" : "Candidate"}</span>`
+    + `<span class="heard">${marked(g.heard, g.said)}</span><span class="said">said: ${esc(g.said)}</span>`;
+  li.addEventListener("click", () => { audio.currentTime = g.start + .01; audio.play(); });
+  lines.appendChild(li);
+});
+$("wer").textContent = CALL.wer + "%";
+$("said").addEventListener("change", e => lines.classList.toggle("show-said", e.target.checked));
+
+const o = CALL.output, pips = (v, n) => `<span class="pips" aria-hidden="true">${Array.from({length: n}, (_, i) => `<b class="${i < v ? "on" : ""}"></b>`).join("")}</span>`;
+const items = Object.entries(o.score_items).map(([k, v]) => `<span>${k.replace("_", " ")}</span>${pips(v, 2)}<span>${v} / 2</span>`).join("");
+$("ticket").innerHTML = `
+  <dt>Category</dt><dd>${esc(o["Call Category"])}</dd>
+  <dt>Sub-category</dt><dd class="big">${esc(o["Sub-Category"])}</dd>
+  <dd class="alt">confidence ${o.confidence.toFixed(2)}${o.needs_review ? ", sent for review" : ""}. Next guesses: ${o.alternatives.map(esc).join(", ")}</dd>
+  <dt>AI insight</dt><dd>${esc(o["AI Insight"])}</dd>
+  <dt>Summary</dt><dd class="muted">${esc(o.Summary)}</dd>
+  <dt>Agent score</dt><dd class="big">${o["Agent Score"]} / 10</dd><dd class="scores">${items}</dd>
+  <dt>Call resolved</dt><dd>${esc(o["Call Resolved"])} <span class="alt">(the model said: ${esc(o.call_resolved_raw.toLowerCase())})</span></dd>`;
+
+const audio = $("audio"), btn = $("play"), fill = $("fill"), bar = $("bar"), time = $("time");
+btn.addEventListener("click", () => audio.paused ? audio.play() : audio.pause());
+audio.addEventListener("play", () => btn.textContent = "Pause");
+audio.addEventListener("pause", () => btn.textContent = "Play call");
+audio.addEventListener("timeupdate", () => {
+  const t = audio.currentTime, d = audio.duration || 57;
+  fill.style.width = (100 * t / d) + "%"; time.textContent = mmss(t) + " / " + mmss(d); bar.setAttribute("aria-valuenow", Math.round(t));
+  const k = CALL.segments.findIndex(g => t >= g.start - .15 && t < g.end + .3);
+  lines.querySelectorAll("li").forEach(li => li.classList.toggle("now", +li.dataset.k === k));
+});
+const seek = x => { const r = bar.getBoundingClientRect(); audio.currentTime = Math.max(0, Math.min(1, (x - r.left) / r.width)) * (audio.duration || 57); };
+bar.addEventListener("click", e => seek(e.clientX));
+bar.addEventListener("keydown", e => { if (e.key === "ArrowRight") audio.currentTime += 5; if (e.key === "ArrowLeft") audio.currentTime -= 5; });
+</script>
+</body>
+</html>
